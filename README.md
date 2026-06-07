@@ -1,7 +1,8 @@
 # disclaimer
 
 외부 라이브러리:
-SDL3, SDL3_ttf, nlohmann json.hpp
+SDL3, SDL3_ttf, SDL3_image
+nlohmann json.hpp
 
 폰트:
 freesans.ttf
