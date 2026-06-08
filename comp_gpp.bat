@@ -1,7 +1,7 @@
 g++ -x c++-header^
  -I./include -I./lib -I./lib/SDL3/include -I./lib/SDL3_ttf/include^
  -I./lib/SDL3_image/include^
- include/pch.h -o include/pch.h.pch
+ include/pch.h -o include/pch.h.gch
 
 g++ src/*.cpp^
  -I./include -I./lib -I./lib/SDL3/include -I./lib/SDL3_ttf/include^

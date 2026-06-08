@@ -1,8 +1,9 @@
 #include "pch.h"
 
-#include "helloSDL.h"
+#include "textures.h"
 
 int main() {
-
+    LTexture lt;
+    lt.Loop();
 }
 
