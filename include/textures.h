@@ -19,6 +19,12 @@ class LTexture {
     //디스크에서 텍스처 불러오기
     bool LoadFromFile(std::string path);
 
+    //SDL_ttf 라이브러리가 포함되었는지 확인함
+    #if defined (SDL_TTF_MAJOR_VERSION)
+    //텍스트에서 텍스처 생성하기
+    bool loadFromRenderedText(std::string textureText, SDL_Color textColor);
+    #endif
+
     //텍스처 지우기
     void Destroy();
 
@@ -73,4 +79,66 @@ enum class eColorChannel {
 
     Total = 7,
     Unknown = 8
+};
+
+class LButton {
+    public:
+        //버튼 크기
+        static constexpr int kButtonWidth = 300;
+        static constexpr int kButtonHeight = 200;
+
+        LButton();
+
+        //좌측 상단 위치 설정
+        void SetPosition(float x, float y);
+
+        //마우스 이벤트 관리
+        void HandleEvent(SDL_Event *e);
+
+        //버튼 스프라이트 표시
+        void Render();
+
+    private:
+        enum class eButtonSprite {
+            MouseOut = 0,
+            MouseOverMotion = 1,
+            MouseDown = 2,
+            MouseUp = 3
+        };
+
+        //좌측 상단 위치
+        SDL_FPoint mPosition;
+
+        //현재 사용된 전역 스프라이트
+        eButtonSprite mCurrentSprite;
+};
+
+class LTimer {
+    public:
+        //생성자
+        LTimer();
+
+        //시계 동작
+        void Start();
+        void Stop();
+        void Pause();
+        void Unpause();
+
+        //타이머의 시간을 가져옴
+        Uint64 GetTicksNS();
+
+        //타이머의 상태를 확인함
+        bool isStarted();
+        bool isPaused();
+
+    private:
+        //타이머가 시작했을 때 시간
+        Uint64 mStartTicks;
+
+        //타이머가 일시정지했을 때 저장된 시간
+        Uint64 mPausedTicks;
+
+        //타이머 상태
+        bool mPaused;
+        bool mStarted;
 };
