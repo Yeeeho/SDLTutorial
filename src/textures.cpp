@@ -6,8 +6,14 @@
 //렌더할 png 이미지
 LTexture gPngTexture;
 
+//프레임 텍스트용 텍스처
+LTexture gFpsTexture;
+
 //타이머 텍스트용 텍스처
 LTexture gTimeTextTexture;
+
+//고급 타이머용 텍스트 텍스처
+LTexture gTimeTextTextureAdv;
 
 //텍스트용 텍스처
 LTexture gTextTexture;
@@ -216,6 +222,13 @@ bool LTexture::Init()
             success = false;    
         }
         else {
+
+            //수직동기화 활성화
+            if (SDL_SetRenderVSync(gRenderer, 1) == false) {
+                SDL_Log("could not enable vsync, SDL ERROR: %s", SDL_GetError());
+                success = false;
+            }
+
             //폰트 초기화
             if (TTF_Init() == false) {
                 SDL_Log("SDL_ttf could not initialize! SDL_ttf error: %s\n", SDL_GetError());
@@ -302,6 +315,18 @@ int LTexture::Loop()
 {
     int exitCode {0};
 
+    //수직동기화 토글
+    bool vsyncEnabled{true};
+
+    //fps 한도 토글
+    bool fpsCapEnabled{false};
+
+    //프레임 레이트를 제한할 타이머
+    LTimer capTimer;
+
+    //렌더링에 걸린 시간
+    Uint64 renderingNS{0};
+
     //앱 타이머
     LTimer timer;
 
@@ -362,6 +387,9 @@ int LTexture::Loop()
             //메인 루프
             while (quit == false) {
 
+                //프레임 타이머 시작
+                capTimer.Start();
+
                 //이벤트 데이터를 가져옴
                 while (SDL_PollEvent(&e) == true) {
                     //이벤트가 종료 타입이라면 
@@ -381,9 +409,37 @@ int LTexture::Loop()
                         buttons[i].HandleEvent(&e);
                     }
 
+                    //엔터 키를 눌렀을 때 시작시간이 리셋됨
                     if( e.type == SDL_EVENT_KEY_DOWN )
                     {
-                        //Set texture
+
+                        //시작 혹은 정지
+                        if (e.key.key == SDLK_RETURN) {
+                            //엔터 키를 눌렀을 때 시작시간이 리셋됨
+                            if (timer.isStarted()) {
+                                timer.Stop();
+                            }
+                            else {
+                                timer.Start();
+                            }
+
+                            //프레임 토글
+                            vsyncEnabled = !vsyncEnabled;
+                            SDL_SetRenderVSync(gRenderer, (vsyncEnabled) ? 1 : SDL_RENDERER_VSYNC_DISABLED);
+                        }
+                        else if (e.key.key == SDLK_SPACE) {
+                            if (timer.isPaused()) {
+                                timer.Unpause();
+                            }
+                            else {
+                                timer.Pause();
+                            }
+
+                            //fps제한 토글
+                            fpsCapEnabled = !fpsCapEnabled;
+                        }
+
+                        //텍스처 설정
                         if( e.key.key == SDLK_UP )
                         {
                             currentTexture = &gUpTexture;
@@ -459,6 +515,16 @@ int LTexture::Loop()
                     }
                 }
                 
+                //프레임 텍스트 업데이트
+                if (renderingNS != 0) {
+                    double framesPerSecond{1000000000.0/static_cast<double>(renderingNS)};
+
+                    timeText.str("");
+                    timeText << "Frames per second: " << (vsyncEnabled ? "(Vsync)" : "") << (fpsCapEnabled ? ("Cap") : "") << framesPerSecond;
+                    SDL_Color textColor{0x00, 0x00, 0x00, 0xFF};
+                    gFpsTexture.loadFromRenderedText(timeText.str().c_str(), textColor);
+                }
+
                 //타이머가 시작되었다면
                 if (startTime != 0) {
                     //텍스트 업데이트
@@ -468,6 +534,12 @@ int LTexture::Loop()
                     gTimeTextTexture.loadFromRenderedText(timeText.str().c_str(), textColor);
                 }
 
+                //고급 타이머 텍스트 업데이트
+                timeText.str("");
+                timeText << "milliseconds since last time" << (timer.GetTicksNS() / 1000000);
+                SDL_Color textColor {0x00, 0x00, 0x00, 0xFF};
+                gTimeTextTextureAdv.loadFromRenderedText(timeText.str().c_str(), textColor);
+                
                 //키 상태에 맞게 배경색을 바꾼다.
                 const bool* keyStates = SDL_GetKeyboardState(nullptr);
                 if (keyStates[SDL_SCANCODE_UP] == true) {
@@ -475,7 +547,7 @@ int LTexture::Loop()
                     bgColor.g = 0x00;
                     bgColor.b = 0x00;
                 }
-
+                
                 //배경색을 채움
                 SDL_SetRenderDrawColor(gRenderer,
                     kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::BackGroundRed)]], 
@@ -484,6 +556,15 @@ int LTexture::Loop()
                     0xFF);
                 SDL_RenderClear(gRenderer);
                 
+                //프레임 텍스트 렌더링
+                gFpsTexture.Render(0.f, gFpsTexture.GetHeight() * 3);
+
+                //타이머 텍스트 렌더링
+                gTimeTextTexture.Render(0.f, (gTimeTextTexture.GetHeight()));
+                
+                //고급 타이머 텍스트 렌더링
+                gTimeTextTextureAdv.Render(0.f, gTimeTextTextureAdv.GetHeight() * 2);
+
                 //텍스트 렌더링
                 gTextTexture.Render((kScreenWidth - gTextTexture.GetWidth()) / 2.f, (kScreenHeight - gTextTexture.GetHeight()) / 2.f);
                 
@@ -491,9 +572,7 @@ int LTexture::Loop()
                 buttons[2].Render();
                 buttons[3].Render();
                 
-                //타이머 텍스트 렌더링
-                gTimeTextTexture.Render(0.f, (gTimeTextTexture.GetHeight()));
-
+                    
                 //색깔 텍스처의 색을 설정하고 렌더링함
                 currentTexture->SetColor(
                     kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureRed)]],
@@ -556,6 +635,19 @@ int LTexture::Loop()
 
                 //화면을 업데이트함
                 SDL_RenderPresent(gRenderer);
+
+                renderingNS = capTimer.GetTicksNS();
+
+                constexpr Uint64 nsPerFrame = 1000000000 / kScreenFps;
+                //프레임이 시간을 초과했다면
+                if (fpsCapEnabled && renderingNS < nsPerFrame) {
+                    //남은 시간만큼 대기
+                    Uint64 sleepTime = nsPerFrame - renderingNS;
+                    SDL_DelayNS(sleepTime);
+                    
+                    //대기 시간을 포함해서 프레임 시간을 가져옴
+                    renderingNS = capTimer.GetTicksNS();
+                }
             }
         }
     }
@@ -722,4 +814,14 @@ Uint64 LTimer::GetTicksNS()
     }
 
     return time;
+}
+
+bool LTimer::isStarted()
+{
+    return mStarted;
+}
+
+bool LTimer::isPaused()
+{
+    return mPaused;
 }

@@ -15,3 +15,4 @@ extern SDL_Color bgColor { 0xFF, 0xFF, 0xFF, 0xFF };
 /* 화면 크기 상수 */
 extern const int kScreenWidth{640};
 extern const int kScreenHeight{480};
+extern const int kScreenFps{60};
