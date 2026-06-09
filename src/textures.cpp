@@ -9,6 +9,9 @@ LTexture gPngTexture;
 //스프라이트 시트
 LTexture gSpriteSheetTexture;
 
+//블렌딩과 모듈레이션을 적용할 텍스처
+LTexture gColorsTexture;
+
 //방향에 맞춰서 출력되는 이미지
 LTexture gUpTexture, gDownTexture, gLeftTexture, gRightTexture;
 
@@ -69,6 +72,21 @@ void LTexture::Destroy()
 
     mWidth = 0;
     mHeight = 0;
+}
+
+void LTexture::SetColor(Uint8 r, Uint8 g, Uint8 b)
+{
+    SDL_SetTextureColorMod(mTexture, r, g, b);
+}
+
+void LTexture::SetOpacity(Uint8 alpha)
+{
+    SDL_SetTextureAlphaMod(mTexture, alpha);
+}
+
+void LTexture::SetBlendMode(SDL_BlendMode blendMode)
+{
+    SDL_SetTextureBlendMode(mTexture, blendMode);
 }
 
 void LTexture::Render(float x, float y, SDL_FRect *clip, float width, float height)
@@ -209,6 +227,20 @@ int LTexture::Loop()
 {
     int exitCode {0};
 
+    //색 초기화
+    Uint8 colorChannelsIndices[static_cast<int>(eColorChannel::Total)];
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureRed)] = 2;
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureGreen)] = 2;
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureBlue)] = 2;
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureAlpha)] = 2;
+
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureRed)] = 2;
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureGreen)] = 2;
+    colorChannelsIndices[static_cast<int>(eColorChannel::TextureBlue)] = 2;
+    
+    //블렌딩 초기화
+    gColorsTexture.SetBlendMode(SDL_BLENDMODE_BLEND);
+
     if (Init() == false) {
         SDL_Log("unable to init program\n");
         exitCode = 1;
@@ -275,6 +307,49 @@ int LTexture::Loop()
                         }
                         else if (e.key.key == SDLK_3) {
                             flipMode = SDL_FLIP_VERTICAL;
+                        }
+
+                        eColorChannel channelToUpdate = eColorChannel::Unknown;
+                        if (e.key.key == SDLK_A) {
+                            channelToUpdate = eColorChannel::TextureRed;
+                        }
+                        else if (e.key.key == SDLK_S) {
+                            channelToUpdate = eColorChannel::TextureGreen;
+                        }
+                        else if (e.key.key == SDLK_D) {
+                            channelToUpdate = eColorChannel::TextureBlue;
+                        }
+                        else if (e.key.key == SDLK_F) {
+                            channelToUpdate = eColorChannel::TextureAlpha;
+                        }
+
+                        else if (e.key.key == SDLK_Q) {
+                            channelToUpdate = eColorChannel::BackGroundRed;
+                        }
+                        else if (e.key.key == SDLK_W) {
+                            channelToUpdate = eColorChannel::BackGroundGreen;
+                        }
+                        else if (e.key.key == SDLK_E) {
+                            channelToUpdate = eColorChannel::BackGroundBlue;
+                        }
+
+                        if (channelToUpdate != eColorChannel::Unknown) {
+                            //채널 값들을 순회
+                            colorChannelsIndices[static_cast<int>(channelToUpdate)]++;
+                            if (colorChannelsIndices[static_cast<int>(channelToUpdate)] >= kColorMagnitudeCount) {
+                                colorChannelsIndices[static_cast<int>(channelToUpdate)] = 0;
+                            }
+
+                            //색 값을 콘솔에 출력
+                            SDL_Log("Texture- R:%d, G:%d, B:%d, A:%d | Background- R:%d, G:%d, B:%d",
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureRed)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureGreen)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureBlue)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureAlpha)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::BackGroundRed)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::BackGroundGreen)]],
+                                kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::BackGroundBlue)]]
+                            );
                         }
                     }
                 }

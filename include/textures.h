@@ -22,6 +22,15 @@ class LTexture {
     //텍스처 지우기
     void Destroy();
 
+    //컬러 모듈레이션 설정
+    void SetColor(Uint8 r, Uint8 g, Uint8 b);
+
+    //알파값을 설정
+    void SetOpacity(Uint8 alpha);
+
+    //블렌드 모드 설정
+    void SetBlendMode(SDL_BlendMode blendMode);
+
     //텍스처 그리기
     void Render(float x, float y);
     void Render(float x, float y, SDL_FRect* clip, float width, float height);
@@ -46,4 +55,22 @@ class LTexture {
     int mWidth;
     int mHeight;
 
+};
+
+//색 상수
+constexpr int kColorMagnitudeCount = 3;
+constexpr Uint8 kColorMagnitudes[kColorMagnitudeCount] = {0x00, 0x7F, 0xFF};
+
+enum class eColorChannel {
+    TextureRed = 0,
+    TextureGreen = 1,
+    TextureBlue = 2,
+    TextureAlpha = 3,
+
+    BackGroundRed = 4,
+    BackGroundGreen = 5,
+    BackGroundBlue = 6,
+
+    Total = 7,
+    Unknown = 8
 };
