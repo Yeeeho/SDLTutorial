@@ -406,6 +406,31 @@ bool LTexture::LoadMedia()
 
 void LTexture::Close()
 {
+    //음악 트랙을 해제
+    MIX_DestroyTrack(gMusicTrack);
+    gMusicTrack = nullptr;
+
+    //효과음 트랙을 해제
+    MIX_DestroyTrack(gEffectTrack);
+    gEffectTrack = nullptr;
+
+    //효과음들을 해제
+    MIX_DestroyAudio(gScratchAudio);
+    gScratchAudio = nullptr;
+    MIX_DestroyAudio(gHighAudio);
+    gHighAudio = nullptr;
+    MIX_DestroyAudio(gMediumAudio);
+    gMediumAudio = nullptr;
+    MIX_DestroyAudio(gLowAudio);
+    gLowAudio = nullptr;
+
+    //믹서를 해제
+    MIX_DestroyMixer(gMixer);
+    gMixer = nullptr;
+
+    //오디오 프롬프트 해제
+    gPromptTexture.Destroy();
+
     //텍스처 비우기
     gPngTexture.Destroy();
 
@@ -422,6 +447,7 @@ void LTexture::Close()
     //SDL 서브시스템 종료
     SDL_Quit();
     TTF_Quit();
+    MIX_Quit();
 }
 
 int LTexture::Loop()
@@ -491,6 +517,8 @@ int LTexture::Loop()
             //종료 플래그
             bool quit {false};
 
+            MIX_SetMixerGain(gMixer, 0.2f);
+
             //이벤트 데이터 
             SDL_Event e;
             SDL_zero(e);
@@ -502,7 +530,7 @@ int LTexture::Loop()
             SDL_FlipMode flipMode = SDL_FLIP_NONE;
 
             LTexture* currentTexture = &gUpTexture;
-
+ 
             //메인 루프
             while (quit == false) {
 
@@ -515,6 +543,61 @@ int LTexture::Loop()
                     if (e.type == SDL_EVENT_QUIT) {
                         //메인 루프를 종료함
                         quit = true;
+                    }
+
+                    //소리 관련 이벤트 처리
+                    if (e.type == SDL_EVENT_KEY_DOWN) {
+
+                        switch(e.key.key) {
+                            //높은 음을 재생함
+                            case SDLK_1:
+                            MIX_SetTrackAudio(gEffectTrack, gHighAudio);
+                            MIX_PlayTrack(gEffectTrack, 0);
+                            break;
+                            //중간 음을 재생함
+                            case SDLK_2:
+                            MIX_SetTrackAudio(gEffectTrack, gMediumAudio);
+                            MIX_PlayTrack(gEffectTrack, 0);
+                            break;
+                            //낮은 음을 재생함
+                            case SDLK_3:
+                            MIX_SetTrackAudio(gEffectTrack, gLowAudio);
+                            MIX_PlayTrack(gEffectTrack, 0);
+                            break;
+                            //스크래치 사운드 재생함
+                            case SDLK_4:
+                            MIX_SetTrackAudio(gEffectTrack, gScratchAudio);
+                            MIX_PlayTrack(gEffectTrack, 0);
+                            break;
+                            case SDLK_9:
+                            //아무런 음악이 재생되고 있지 않다면
+                            if (MIX_TrackPlaying(gMusicTrack) == false && MIX_TrackPaused(gMusicTrack) == false) {
+                                //음악을 재생함
+                                SDL_PropertiesID props = SDL_CreateProperties();
+                                SDL_SetNumberProperty(props, MIX_PROP_PLAY_LOOPS_NUMBER, -1);
+                                MIX_PlayTrack(gMusicTrack, props);
+                                SDL_DestroyProperties(props);
+                            }
+                            //음악이 재생되고 있다면
+                            else {
+                                //음악이 일시정지 상태라면
+                                if (MIX_TrackPaused(gMusicTrack) == true) {
+                                    //일시정지를 해제함
+                                    MIX_ResumeTrack(gMusicTrack);
+                                    }
+                                    //음악이 재생중이라면
+                                    else {
+                                        //음악을 일시정지함
+                                    MIX_PauseTrack(gMusicTrack);
+                                }
+                            }
+                            break;
+                            
+                            //음악을 정지함
+                            case SDLK_0:
+                            MIX_StopTrack(gMusicTrack, 0);
+                            break;    
+                        }
                     }
 
                     //엔터 키를 누르면 시간이 리셋됨
@@ -531,9 +614,9 @@ int LTexture::Loop()
                     //점 이벤트 핸들러
                     dot.HandleEvent(e);
 
-                    //엔터 키를 눌렀을 때 시작시간이 리셋됨
                     if( e.type == SDL_EVENT_KEY_DOWN )
                     {
+                        //엔터 키를 눌렀을 때 시작시간이 리셋됨
                         //시작 혹은 정지
                         if (e.key.key == SDLK_RETURN) {
                             //엔터 키를 눌렀을 때 시작시간이 리셋됨
