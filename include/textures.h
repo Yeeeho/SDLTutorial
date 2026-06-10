@@ -142,3 +142,31 @@ class LTimer {
         bool mPaused;
         bool mStarted;
 };
+
+class Dot {
+    public:
+        //점의 크기
+        static constexpr int kDotWidth = 20;
+        static constexpr int kDotHeight = 20;
+
+        //점의 최대 축 속력
+        static constexpr int kDotVel = 10;
+
+        //생성자
+        Dot();
+
+        //버튼이 눌리는걸 감지하고 점의 속력을 조절함
+        void HandleEvent(SDL_Event &e);
+
+        //점을 움직임
+        void Move();
+
+        //화면에 점을 보여줌
+        void Render();
+    private:
+        //점의 x,y축의 오프셋
+        int mPosX, mPosY;
+
+        //점의 속력
+        int mVelX, mVelY;
+};

@@ -3,8 +3,29 @@
 #include "externs.h"
 #include "textures.h"
 
+//출력할 믹서
+MIX_Mixer* gMixer{nullptr};
+
+//오디오 안내용 텍스처
+LTexture gPromptTexture;
+
+//사용될 소리 효과
+MIX_Audio* gScratchAudio{nullptr};
+MIX_Audio* gHighAudio{nullptr};
+MIX_Audio* gMediumAudio{nullptr};
+MIX_Audio* gLowAudio{nullptr};
+
+//소리 효과가 재생될 트랙
+MIX_Track* gEffectTrack{nullptr};
+
+//음악이 재생될 트랙
+MIX_Track* gMusicTrack{nullptr};
+
 //렌더할 png 이미지
 LTexture gPngTexture;
+
+//점 텍스처
+LTexture gDotTexture;
 
 //프레임 텍스트용 텍스처
 LTexture gFpsTexture;
@@ -20,6 +41,9 @@ LTexture gTextTexture;
 
 //버튼용 텍스처
 LTexture gButtonSpriteTexture;
+
+//애니메이션 스프라이트 시트
+LTexture gAnimationSpriteSheet;
 
 //스프라이트 시트
 LTexture gSpriteSheetTexture;
@@ -211,7 +235,7 @@ bool LTexture::Init()
 {
     bool success { true };
 
-    if (SDL_Init(SDL_INIT_VIDEO) == false) {
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) == false) {
         SDL_Log("SDL could not initialize. SDL error: %s\n", SDL_GetError());
         success = false;
     }
@@ -234,6 +258,20 @@ bool LTexture::Init()
                 SDL_Log("SDL_ttf could not initialize! SDL_ttf error: %s\n", SDL_GetError());
                 success = false;
             }
+
+            //SDL 믹서 초기화
+            if (MIX_Init() == false) {
+                SDL_Log("SDL mixer could not initialize, SDL mixer Error: %s\n", SDL_GetError());
+                success = false;
+            }
+            else {
+                //믹서 생성
+                gMixer = MIX_CreateMixerDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, nullptr);
+                if (gMixer == nullptr) {
+                    SDL_Log("SDL_mixer could not create mixer, SDL_mixer Error: %s\n", SDL_GetError());
+                    success = false;
+                }
+            }
         }
     }
 
@@ -243,6 +281,67 @@ bool LTexture::Init()
 bool LTexture::LoadMedia()
 {
     bool success { true };
+
+    //오디오 프롬프트 로드
+    if (gPromptTexture.LoadFromFile("images/prompt.png") == false) {
+        SDL_Log("Unable to load audio prompt image\n");
+        success = false;
+    }
+
+    //소리 효과를 로드함
+    gScratchAudio = MIX_LoadAudio(gMixer, "sounds/scratch.wav", true);
+    if (gScratchAudio == nullptr) {
+        SDL_Log("Unable to load sractch sound, SDL_mixer Error: %s\n", SDL_GetError());
+        success = false;
+    }
+    gHighAudio = MIX_LoadAudio(gMixer, "sounds/high.wav", true);
+    if (gHighAudio == nullptr) {
+        SDL_Log("Unable to load sractch sound, SDL_mixer Error: %s\n", SDL_GetError());
+        success = false;
+    }
+
+    gMediumAudio = MIX_LoadAudio(gMixer, "sounds/medium.wav", true);
+    if (gMediumAudio == nullptr) {
+        SDL_Log("Unable to load sractch sound, SDL_mixer Error: %s\n", SDL_GetError());
+        success = false;
+    }
+
+    gLowAudio = MIX_LoadAudio(gMixer, "sounds/low.wav", true);
+    if (gLowAudio == nullptr) {
+        SDL_Log("Unable to load sractch sound, SDL_mixer Error: %s\n", SDL_GetError());
+        success = false;
+    }
+
+    //소리 효과를 위해 트랙을 검사
+    if (gHighAudio != nullptr && gMediumAudio != nullptr && gLowAudio != nullptr) {
+        gEffectTrack = MIX_CreateTrack(gMixer);
+        if (gEffectTrack == nullptr) {
+            SDL_Log("Failed to create sound effect track, SDL_mixer Error: %s\n", SDL_GetError());
+            success = false;
+        }
+    }
+
+    //음악을 로드
+    MIX_Audio* musicAudio = MIX_LoadAudio(gMixer, "sounds/beat.wav", false);
+    if (musicAudio == nullptr) {
+        SDL_Log("Unable to load music! SDL_Error: %s\n", SDL_GetError());
+        success = false;
+    }
+    else {
+        //음악을 위한 트랙을 생성
+        gMusicTrack = MIX_CreateTrack(gMixer);
+        if (gMusicTrack == nullptr) {
+            SDL_Log("Failed to create music track! SDL_Error: %s\n", SDL_GetError());
+            success = false;
+        }
+        else {
+            //트랙을 위한 오디오 설정
+            MIX_SetTrackAudio(gMusicTrack, musicAudio);
+        }
+
+        //포인터의 레퍼런스를 카운팅하므로 더이상 레퍼런스가 없을 때 파괴함.
+        MIX_DestroyAudio(musicAudio); 
+    }
 
     //씬 폰트를 로드함
     std::string fontPath{ "fonts/lazy.ttf" };
@@ -260,11 +359,25 @@ bool LTexture::LoadMedia()
         }
     }
 
+    //점 스프라이트 로드
+    if (gDotTexture.LoadFromFile("images/dot.png") == false) {
+        SDL_Log("Unable to load png image\n");
+        success = false;
+    }
+
+    //버튼 스프라이트 로드
     if (gButtonSpriteTexture.LoadFromFile("images/button.png") == false) {
     SDL_Log("Unable to load png image\n");
         success = false;
     }
+    
+    //애니메이션 스프라이트 시트 로드
+    if (gAnimationSpriteSheet.LoadFromFile("images/foo-sprites.png") == false) {
+        SDL_Log("Unable to load png image\n");
+        success = false;
+    }
 
+    //스프라이트 시트 로드
     if (gSpriteSheetTexture.LoadFromFile("images/dots.png") == false) {
         SDL_Log("Unable to load png image\n");
         success = false;
@@ -324,6 +437,9 @@ int LTexture::Loop()
     //프레임 레이트를 제한할 타이머
     LTimer capTimer;
 
+    //현재 애니메이션 프레임
+    int frame{-1};
+
     //렌더링에 걸린 시간
     Uint64 renderingNS{0};
 
@@ -343,6 +459,9 @@ int LTexture::Loop()
     buttons[1].SetPosition(kScreenWidth - LButton::kButtonWidth, 0);
     buttons[2].SetPosition(0, kScreenHeight - LButton::kButtonHeight);
     buttons[3].SetPosition(kScreenWidth - LButton::kButtonWidth, kScreenHeight - LButton::kButtonHeight);
+
+    //화면에서 움직일 점
+    Dot dot;
 
     //색 초기화
     Uint8 colorChannelsIndices[static_cast<int>(eColorChannel::Total)];
@@ -409,10 +528,12 @@ int LTexture::Loop()
                         buttons[i].HandleEvent(&e);
                     }
 
+                    //점 이벤트 핸들러
+                    dot.HandleEvent(e);
+
                     //엔터 키를 눌렀을 때 시작시간이 리셋됨
                     if( e.type == SDL_EVENT_KEY_DOWN )
                     {
-
                         //시작 혹은 정지
                         if (e.key.key == SDLK_RETURN) {
                             //엔터 키를 눌렀을 때 시작시간이 리셋됨
@@ -514,6 +635,29 @@ int LTexture::Loop()
                         }
                     }
                 }
+
+                //다음 프레임으로 넘어감
+                frame++;
+
+                //애니메이션 순회
+                constexpr int kWakingAnimationFrames = 4;
+                constexpr int kWakingAnimationFramesPerSprite = 6;
+                if (frame / kWakingAnimationFramesPerSprite >= kWakingAnimationFrames) {
+                    frame = 0;
+                }
+
+                //스프라이트 클립 설정
+                constexpr float kSpriteWidth = 64;
+                constexpr float kSpriteHeight = 205;
+                SDL_FRect spriteClips[kWakingAnimationFrames] = {
+                    {kSpriteWidth * 0, 0.f, kSpriteWidth, kSpriteHeight},
+                    {kSpriteWidth * 1, 0.f, kSpriteWidth, kSpriteHeight},
+                    {kSpriteWidth * 2, 0.f, kSpriteWidth, kSpriteHeight},
+                    {kSpriteWidth * 3, 0.f, kSpriteWidth, kSpriteHeight}
+                };
+
+                //점 업데이트
+                dot.Move();
                 
                 //프레임 텍스트 업데이트
                 if (renderingNS != 0) {
@@ -556,6 +700,13 @@ int LTexture::Loop()
                     0xFF);
                 SDL_RenderClear(gRenderer);
                 
+                //현재 애니메이션 프레임 렌더
+                SDL_FRect* currentClip{&spriteClips[frame/kWakingAnimationFramesPerSprite]};
+                gAnimationSpriteSheet.RenderFlip((kScreenWidth - kSpriteWidth) / 2, (kScreenHeight - kSpriteHeight) / 2, currentClip);
+
+                //점 렌더링
+                dot.Render();
+
                 //프레임 텍스트 렌더링
                 gFpsTexture.Render(0.f, gFpsTexture.GetHeight() * 3);
 
@@ -572,7 +723,6 @@ int LTexture::Loop()
                 buttons[2].Render();
                 buttons[3].Render();
                 
-                    
                 //색깔 텍스처의 색을 설정하고 렌더링함
                 currentTexture->SetColor(
                     kColorMagnitudes[colorChannelsIndices[static_cast<int>(eColorChannel::TextureRed)]],
@@ -639,6 +789,7 @@ int LTexture::Loop()
                 renderingNS = capTimer.GetTicksNS();
 
                 constexpr Uint64 nsPerFrame = 1000000000 / kScreenFps;
+
                 //프레임이 시간을 초과했다면
                 if (fpsCapEnabled && renderingNS < nsPerFrame) {
                     //남은 시간만큼 대기
@@ -824,4 +975,64 @@ bool LTimer::isStarted()
 bool LTimer::isPaused()
 {
     return mPaused;
+}
+
+Dot::Dot() :
+    mPosX{0},
+    mPosY{0},
+    mVelX{0},
+    mVelY{0}
+{
+}
+
+void Dot::HandleEvent(SDL_Event &e)
+{
+    //만약 키가 눌렸다면
+    if (e.type == SDL_EVENT_KEY_DOWN && e.key.repeat == 0) {
+        //속력 조절
+        switch(e.key.key) {
+            case SDLK_UP: mVelY -= kDotVel; break;
+            case SDLK_DOWN: mVelY += kDotVel; break;
+            case SDLK_LEFT: mVelX -= kDotVel; break;
+            case SDLK_RIGHT: mVelX += kDotVel; break;
+        }
+    }
+
+    //키를 떼었다면
+    else if (e.type == SDL_EVENT_KEY_UP && e.key.repeat == 0) {
+        //속력 조절
+        switch(e.key.key) {
+            case SDLK_UP: mVelY += kDotVel; break;
+            case SDLK_DOWN: mVelY -= kDotVel; break;
+            case SDLK_LEFT: mVelX += kDotVel; break;
+            case SDLK_RIGHT: mVelX -= kDotVel; break;
+        }
+    }
+}
+
+void Dot::Move()
+{
+    //점을 왼쪽이나 오른쪽으로 움직임
+    mPosX += mVelX;
+
+    //만약 점이 왼쪽이나 오른쪽으로 너무 많이 움직였다면 (화면 밖)
+    if ((mPosX < 0) || (mPosX + kDotWidth > kScreenWidth)) {
+        //뒤로 움직임
+        mPosX -= mVelX;
+    }
+
+    //점을 위나 아래로 움직임
+    mPosY += mVelY;
+
+    //점이 너무 위나 아래로 갔다면
+    if ((mPosY < 0) || (mPosY + kDotHeight > kScreenHeight)) {
+        //뒤로 움직임
+        mPosY -= mVelY;
+    }
+}
+
+void Dot::Render()
+{
+    //점을 보여줌
+    gDotTexture.Render(static_cast<float>(mPosX), static_cast<float>(mPosY));
 }
