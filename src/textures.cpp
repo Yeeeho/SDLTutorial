@@ -21,11 +21,17 @@ MIX_Track* gEffectTrack{nullptr};
 //음악이 재생될 트랙
 MIX_Track* gMusicTrack{nullptr};
 
+//배경 텍스처
+LTexture gBgTexture;
+
 //렌더할 png 이미지
 LTexture gPngTexture;
 
 //점 텍스처
 LTexture gDotTexture;
+
+//입력 텍스트용 텍스처
+LTexture gInputTextTexture;
 
 //프레임 텍스트용 텍스처
 LTexture gFpsTexture;
@@ -359,6 +365,12 @@ bool LTexture::LoadMedia()
         }
     }
 
+    //배경 로드
+    if (gBgTexture.LoadFromFile("images/background.png") == false) {
+        SDL_Log("Unable to load png image\n");
+        success = false;
+    }
+
     //점 스프라이트 로드
     if (gDotTexture.LoadFromFile("images/dot.png") == false) {
         SDL_Log("Unable to load png image\n");
@@ -486,8 +498,19 @@ int LTexture::Loop()
     buttons[2].SetPosition(0, kScreenHeight - LButton::kButtonHeight);
     buttons[3].SetPosition(kScreenWidth - LButton::kButtonWidth, kScreenHeight - LButton::kButtonHeight);
 
+    //카메라 영역 정의
+    SDL_FRect camera{0.f, 0.f, kScreenWidth, kScreenHeight};
+
     //화면에서 움직일 점
     Dot dot;
+
+    //화면에서 움직일 사각형
+    Square square;
+    
+    //충돌시킬 벽
+    constexpr int kWallWidth = Square::kSquareWidth;
+    constexpr int kWallHeight = kScreenHeight - Square::kSquareHeight * 2;
+    SDL_Rect wall{(kScreenWidth - kWallWidth) / 2, (kScreenHeight - kWallHeight) / 2, kWallWidth, kWallHeight};
 
     //색 초기화
     Uint8 colorChannelsIndices[static_cast<int>(eColorChannel::Total)];
@@ -517,11 +540,18 @@ int LTexture::Loop()
             //종료 플래그
             bool quit {false};
 
+            //믹서 볼륨 조절
             MIX_SetMixerGain(gMixer, 0.2f);
 
             //이벤트 데이터 
             SDL_Event e;
             SDL_zero(e);
+
+            const std::string kStartingText = "HI";
+            //현재 입력 텍스트
+            std::string inputText{kStartingText};
+            //텍스트 입력을 활성화
+            SDL_StartTextInput(gWindow);
 
             //회전각도
             double degrees = 0.0;
@@ -537,12 +567,51 @@ int LTexture::Loop()
                 //프레임 타이머 시작
                 capTimer.Start();
 
+                //텍스트 렌더링용 플래그 변수
+                bool renderText{false};
+
                 //이벤트 데이터를 가져옴
                 while (SDL_PollEvent(&e) == true) {
                     //이벤트가 종료 타입이라면 
                     if (e.type == SDL_EVENT_QUIT) {
                         //메인 루프를 종료함
                         quit = true;
+                    }
+
+                    //키 입력
+                    if (e.type == SDL_EVENT_KEY_DOWN) {
+                        //백스페이스 제어
+                        if (e.key.key == SDLK_BACKSPACE && inputText.length() > 0) {
+                            //문자 하나 지움
+                            inputText.pop_back();
+                            renderText = true;
+                        }
+                        
+                            //복사 제어
+                        else if (e.key.key == SDLK_C && SDL_GetModState() & SDL_KMOD_CTRL) {
+                            SDL_SetClipboardText(inputText.c_str());
+                        }
+
+                        //붙여넣기 제어
+                        else if (e.key.key == SDLK_V && SDL_GetModState() && SDL_KMOD_CTRL) {
+                            //임시 버퍼에서 텍스트를 붙여넣는다.
+                            char* tempText{SDL_GetClipboardText()};
+                            inputText = tempText;
+                            SDL_free(tempText);
+                            
+                            renderText = true;
+                        }
+                    }
+                    
+                    //텍스트 입력 이벤트
+                    else if (e.type == SDL_EVENT_TEXT_INPUT) {
+                        //복사하거나 붙여넣기가 아니라면
+                        char firstChar{static_cast<char>(toupper(e.text.text[0]))};
+                        if (!(SDL_GetModState() && SDL_KMOD_CTRL && (firstChar == 'C' || firstChar == 'V'))) {
+                            //문자를 더함
+                            inputText += e.text.text;
+                            renderText = true;
+                        }
                     }
 
                     //소리 관련 이벤트 처리
@@ -613,6 +682,9 @@ int LTexture::Loop()
 
                     //점 이벤트 핸들러
                     dot.HandleEvent(e);
+
+                    //사각형 이벤트 핸들러
+                    square.HandleEvent(e);
 
                     if( e.type == SDL_EVENT_KEY_DOWN )
                     {
@@ -742,6 +814,42 @@ int LTexture::Loop()
                 //점 업데이트
                 dot.Move();
                 
+                //카메라를 점 중심으로 이동
+                camera.x = static_cast<float>((dot.getPosX()) + Dot::kDotWidth/2 - kScreenWidth/2);
+                camera.y = static_cast<float>((dot.getPosY()) + Dot::kDotHeight/2 - kScreenHeight/2);
+
+                //카메라 범위 제한
+                if (camera.x < 0) {
+                    camera.x = 0;
+                }
+                else if (camera.x + camera.w > kLevelWidth) {
+                    camera.x = kLevelWidth - camera.w;
+                }
+                if (camera.y < 0) {
+                    camera.y = 0;
+                }
+                else if (camera.y + camera.h > kLevelHeight) {
+                    camera.y = kLevelHeight - camera.h;
+                }
+
+                //사각형 업데이트
+                square.Move(wall);
+
+                //입력 텍스트를 필요에 따라 렌더링함
+                if (renderText) {
+                    SDL_Color textColor = {0x00, 0x00, 0x00, 0xFF};
+                    //텍스트가 비어있지 않음
+                    if (inputText != "") {
+                        //새로운 텍스트를 렌더링함
+                        gInputTextTexture.loadFromRenderedText(inputText.c_str(), textColor);
+                    }
+                    //텍스트가 비어있음
+                    else {
+                        //여백 텍스처 렌더링
+                        gInputTextTexture.loadFromRenderedText(" ", textColor);
+                    }
+                }
+
                 //프레임 텍스트 업데이트
                 if (renderingNS != 0) {
                     double framesPerSecond{1000000000.0/static_cast<double>(renderingNS)};
@@ -783,12 +891,26 @@ int LTexture::Loop()
                     0xFF);
                 SDL_RenderClear(gRenderer);
                 
+                //카메라 배경 렌더링
+                gBgTexture.RenderFlip(0.f, 0.f, &camera);
+
                 //현재 애니메이션 프레임 렌더
                 SDL_FRect* currentClip{&spriteClips[frame/kWakingAnimationFramesPerSprite]};
                 gAnimationSpriteSheet.RenderFlip((kScreenWidth - kSpriteWidth) / 2, (kScreenHeight - kSpriteHeight) / 2, currentClip);
 
                 //점 렌더링
-                dot.Render();
+                dot.Render(camera);
+
+                //벽을 렌더링함
+                SDL_FRect drawingRect {static_cast<float>(wall.x), static_cast<float>(wall.y), static_cast<float>(wall.w), static_cast<float>(wall.h)};
+                SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
+                SDL_RenderRect(gRenderer, &drawingRect);
+                
+                //사각형 렌더링
+                square.Render();
+
+                //입력 텍스트 렌더링
+                gInputTextTexture.Render(0.f, gFpsTexture.GetHeight()*4);
 
                 //프레임 텍스트 렌더링
                 gFpsTexture.Render(0.f, gFpsTexture.GetHeight() * 3);
@@ -840,17 +962,6 @@ int LTexture::Loop()
                 //절반 크기의 스프라이트를 그림
                 gSpriteSheetTexture.Render(kScreenWidth - spriteSize.w, 0.f, &spriteClip, spriteSize.w, spriteSize.h);
 
-                //좌측하단 스프라이트
-                spriteClip.x = 0.f;
-                spriteClip.y = kSpriteSize;
-
-                //스프라이트를 두배로 키움
-                spriteSize.w = kSpriteSize * 2.f;
-                spriteSize.h = kSpriteSize * 2.f;
-
-                //두배로 키운 스프라이트 그림
-                gSpriteSheetTexture.Render(0.f , kScreenHeight - spriteSize.h, &spriteClip, spriteSize.w, spriteSize.h);
-
                 //우측하단 스프라이트
                 spriteClip.x = kSpriteSize;
                 spriteClip.y = kSpriteSize;
@@ -883,6 +994,9 @@ int LTexture::Loop()
                     renderingNS = capTimer.GetTicksNS();
                 }
             }
+
+            //텍스트 입력을 비활성화
+            SDL_StopTextInput(gWindow);
         }
     }
 
@@ -1099,7 +1213,7 @@ void Dot::Move()
     mPosX += mVelX;
 
     //만약 점이 왼쪽이나 오른쪽으로 너무 많이 움직였다면 (화면 밖)
-    if ((mPosX < 0) || (mPosX + kDotWidth > kScreenWidth)) {
+    if ((mPosX < 0) || (mPosX + kDotWidth > kLevelWidth)) {
         //뒤로 움직임
         mPosX -= mVelX;
     }
@@ -1108,7 +1222,7 @@ void Dot::Move()
     mPosY += mVelY;
 
     //점이 너무 위나 아래로 갔다면
-    if ((mPosY < 0) || (mPosY + kDotHeight > kScreenHeight)) {
+    if ((mPosY < 0) || (mPosY + kDotHeight > kLevelHeight)) {
         //뒤로 움직임
         mPosY -= mVelY;
     }
@@ -1118,4 +1232,106 @@ void Dot::Render()
 {
     //점을 보여줌
     gDotTexture.Render(static_cast<float>(mPosX), static_cast<float>(mPosY));
+}
+
+void Dot::Render(SDL_FRect camera)
+{
+    //점을 보여줌
+    gDotTexture.Render(static_cast<float>(mPosX) - camera.x, static_cast<float>(mPosY) - camera.y);
+}
+
+int Dot::getPosX()
+{
+    return mPosX;
+}
+
+int Dot::getPosY()
+{
+    return mPosY;
+}
+
+Square::Square() :
+    mCollisionBox{0, 0, kSquareWidth, kSquareHeight},
+    mVelX{0},
+    mVelY{0}
+{ }
+
+void Square::HandleEvent(SDL_Event &e)
+{
+    //키가 눌렸다면
+    if (e.type == SDL_EVENT_KEY_DOWN && e.key.repeat == 0) {
+        //속력 조절
+        switch(e.key.key) {
+            case SDLK_UP: mVelY -= kSquareVel; break;
+            case SDLK_DOWN: mVelY += kSquareVel; break;
+            case SDLK_LEFT: mVelX -= kSquareVel; break;
+            case SDLK_RIGHT: mVelX += kSquareVel; break;
+        }
+    }
+    //키를 뗐다면
+    else if (e.type == SDL_EVENT_KEY_UP && e.key.repeat == 0) {
+        //속력 조절
+        switch(e.key.key) {
+            case SDLK_UP: mVelY += kSquareVel; break;
+            case SDLK_DOWN: mVelY -= kSquareVel; break;
+            case SDLK_LEFT: mVelX += kSquareVel; break;
+            case SDLK_RIGHT: mVelX -= kSquareVel; break;
+        }
+    }
+}
+
+bool Square::CheckCollision(SDL_Rect a, SDL_Rect b)
+{
+    //사각형 a의 모서리를 계산함
+    int aMinX{a.x};
+    int aMaxX{a.x + a.w};
+    int aMinY{a.y};
+    int aMaxY{a.y + a.h};
+
+    //사각형 b의 모서리를 계산함
+    int bMinX{b.x};
+    int bMaxX{b.x + b.w};
+    int bMinY{b.y};
+    int bMaxY{b.y + b.h};
+
+    //사각형 a의 좌측이 b의 우측일때
+    if (aMinX >= bMaxX) return false;
+    //사각형 a의 우측이 b의 좌측일때
+    if (aMaxX <= bMinX) return false;
+    //a의 위쪽이 b의 아래쪽일때
+    if (aMinY >= bMaxY) return false;
+    //a의 아래쪽이 b의 위쪽일때
+    if (aMaxY <= bMinY) return false;
+
+    //a의 어떤 모서리도 b에서 벗어나지 않았을때
+    return true;
+}
+
+void Square::Move(SDL_Rect collider)
+{
+    //사각형을 왼쪽이나 오른쪽으로 움직임
+    mCollisionBox.x += mVelX;
+    
+    //사각형이 화면 밖으로 나갔거나 벽에 부딪혔을때
+    if ((mCollisionBox.x < 0) || (mCollisionBox.x + kSquareWidth > kScreenWidth) || CheckCollision(mCollisionBox, collider)) {
+        //뒤로 움직인다
+        mCollisionBox.x -= mVelX;
+    }
+
+    //사각형을 위나 아래로 움직인다.
+    mCollisionBox.y += mVelY;
+
+    //사각형이 화면 밖으로 나갔거나 벽에 부딪혔을때
+    if ((mCollisionBox.y < 0) || (mCollisionBox.y + kSquareHeight > kScreenHeight) || CheckCollision(mCollisionBox, collider)) {
+        //뒤로 움직인다
+        mCollisionBox.y -= mVelY;
+    }
+}
+
+void Square::Render()
+{
+    //사각형을 렌더링함
+    SDL_FRect drawingRect{ static_cast<float>(mCollisionBox.x), static_cast<float>(mCollisionBox.y), static_cast<float>(mCollisionBox.w), static_cast<float>(mCollisionBox.h)};
+    SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
+    SDL_RenderRect(gRenderer, &drawingRect);
 }

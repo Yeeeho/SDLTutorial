@@ -163,6 +163,14 @@ class Dot {
 
         //화면에 점을 보여줌
         void Render();
+
+        //점을 카메라 화면에 보여줌
+        void Render(SDL_FRect camera);
+
+        //위치 접근자
+        int getPosX();
+        int getPosY();
+
     private:
         //점의 x,y축의 오프셋
         int mPosX, mPosY;
@@ -170,3 +178,37 @@ class Dot {
         //점의 속력
         int mVelX, mVelY;
 };
+
+//충돌 감지를 위한 사각형
+class Square {
+    public:
+        //사각형의 길이
+        static constexpr int kSquareWidth = 20;
+        static constexpr int kSquareHeight = 20;
+
+        //사각형의 최대 축속력
+        static constexpr int kSquareVel = 10;
+
+        //생성자
+        Square();
+
+        //키를 입력받아 사각형의 속도를 조절
+        void HandleEvent(SDL_Event &e);
+        
+        //두 사각형의 충돌을 확인함
+        bool CheckCollision(SDL_Rect a, SDL_Rect b);
+        
+        //사각형을 움직임
+        void Move(SDL_Rect);
+
+        //사각형을 화면에 보여줌
+        void Render();
+        
+    private:
+        //충돌 상자
+        SDL_Rect mCollisionBox;
+
+        //사각형의 속도
+        int mVelX;
+        int mVelY;
+}; 

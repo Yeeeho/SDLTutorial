@@ -16,3 +16,7 @@ extern SDL_Color bgColor { 0xFF, 0xFF, 0xFF, 0xFF };
 extern const int kScreenWidth{640};
 extern const int kScreenHeight{480};
 extern const int kScreenFps{60};
+
+//레벨 크기
+extern const int kLevelWidth{1200};
+extern const int kLevelHeight{960};
